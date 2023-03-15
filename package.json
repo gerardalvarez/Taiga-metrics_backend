@@ -29,7 +29,8 @@
     "express-session": "^1.17.3",
     "node-cron": "^3.0.2",
     "passport": "^0.5.3",
-    "passport-google-oauth2": "^0.2.0"
+    "passport-google-oauth2": "^0.2.0",
+    "pg": "^8.10.0"
   },
   "devDependencies": {
     "nodemon": "^2.0.21"

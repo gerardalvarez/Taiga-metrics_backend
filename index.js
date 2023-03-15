@@ -13,6 +13,31 @@ require("./public/src/auth");
 
 const app = express();
 
+const { Pool } = require("pg");
+
+const pool = new Pool({
+  user: "postgres",
+  host: "localhost",
+  database: "postgres",
+  password: "example",
+  port: 5433,
+});
+
+pool.query("SELECT NOW()", (err, res) => {
+  if (err) {
+    console.error("Error al conectar a la base de datos", err.stack);
+  } else {
+    console.log("Conexión exitosa a la base de datos:", res.rows[0].now);
+  }
+});
+
+pool.query("SELECT * FROM appuser", (error, results) => {
+  if (error) {
+    throw error;
+  }
+  console.log(results.rows);
+});
+
 app.use(cookieParser());
 app.use(
   cookieSession({
