@@ -10,10 +10,11 @@ const bodyParser = require("body-parser");
 const http = require("http");
 var path = require("path");
 require("./public/src/auth");
+const axios = require("axios");
 
 const app = express();
 
-const { Pool } = require("pg");
+/* const { Pool } = require("pg");
 
 const pool = new Pool({
   user: "postgres",
@@ -37,7 +38,7 @@ pool.query("SELECT * FROM appuser", (error, results) => {
   }
   console.log(results.rows);
 });
-
+ */
 app.use(cookieParser());
 app.use(
   cookieSession({
@@ -57,88 +58,11 @@ app.engine("html", require("ejs").renderFile);
 app.set("view engine", "ejs");
 
 //VARIABLES
-var metrics = {
-  s11a: [],
-  s11b: [],
-  s11c: [],
-  j12a: [],
-  j12b: [],
-  j12c: [],
-  asw12a: [],
-  asw12b: [],
-  asw12c: [],
-  asw12d: [],
-  asw12e: [],
-  asw13a: [],
-  asw13b: [],
-  asw13c: [],
-};
-const groups = [
-  "s11a",
-  "s11b",
-  "s11c",
-  "j12a",
-  "j12b",
-  "j12c",
-  "asw12a",
-  "asw12b",
-  "asw12c",
-  "asw12d",
-  "asw12e",
-  "asw13a",
-  "asw13b",
-  "asw13c",
-];
-const groupNames = {
-  s11a: "PES - BusCAT",
-  s11b: "ElectriCity",
-  s11c: "Potus - Pot Manifesto",
-  j12a: "PES-Green Wheel",
-  j12b: "PES-AirB&Breath",
-  j12c: "MeetCAT",
-  asw12a: "Hacker News - ASW",
-  asw12b: "ASW - Hacker News",
-  asw12c: "ASW: HackerNews Clone",
-  asw12d: "ASW12D",
-  asw12e: "ASW Hacker News Projects",
-  asw13a: "ASW-Framework",
-  asw13b: "ASW",
-  asw13c: "HackerNews ASW",
-};
+var metrics = {};
+
 //CANVIAR EL PRIMER GRUP
 
-function getMetrics(groupcode) {
-  var result = "";
-
-  console.log("CALLING LEARNING DAHSBOARD API");
-
-  http
-    .request(
-      "http://gessi-dashboard.essi.upc.edu:8888/api/metrics/current?prj=" +
-        groupcode,
-      (res) => {
-        let data = "";
-
-        res.on("data", (chunk) => {
-          data += chunk;
-        });
-
-        // Ending the response
-        res.on("end", () => {
-          result = JSON.parse(data);
-          metrics[groupcode] = JSON.parse(data);
-        });
-      }
-    )
-    .on("error", (err) => {
-      console.log("Error: ", err);
-    })
-    .end();
-
-  return result;
-}
-
-//EVERY NIGHT AT 02:00AM
+/* //EVERY NIGHT AT 02:00AM
 cron.schedule("0 2 * * *", function () {
   for (let index = 0; index < groups.length; ++index) {
     let groupcode = groups[index];
@@ -147,58 +71,25 @@ cron.schedule("0 2 * * *", function () {
     }, 3000);
   }
 });
+ */
 
-function isLoggedIn(req, res, next) {
-  if (req.user) {
-    next();
-  } else res.status(401).send();
+let projectNames = [];
+
+function fetchProjectNames() {
+  axios
+    .get("http://gessi-dashboard.essi.upc.edu:8888/api/projects")
+    .then((response) => {
+      projectNames = response.data.map((project) => project.name);
+      console.log("Project names updated:", projectNames);
+    })
+    .catch((error) => console.log(error));
 }
 
+fetchProjectNames();
+setInterval(fetchProjectNames, 60000);
 //GET base
 app.get("/", function (req, res) {
   res.render("index.html");
-});
-
-app.get(
-  "/auth/google",
-  passport.authenticate("google", {
-    scope: ["email", "profile"],
-    prompt: "select_account",
-  })
-);
-
-app.get(
-  "/google/callback",
-  passport.authenticate("google", {
-    successRedirect: "/authenticated",
-    failureRedirect: "/auth/failure",
-  })
-);
-
-app.get("auth/failure", (req, res) => {
-  res.render("error.html");
-});
-
-app.get("/authenticated", isLoggedIn, (req, res) => {
-  var name = req.user.displayName;
-  res.render("auth.html", { name: name });
-});
-
-app.get("/logout", function (req, res, next) {
-  req.session = null;
-  res.render("logout.html");
-});
-
-//GET metrics
-app.get("/metrics", isLoggedIn, (req, res) => {
-  let groupcode = req.query.groupcode;
-  console.log("consulting metrics from group: ", groupcode);
-  if (groupcode in metrics) {
-    res.send({
-      metrics: metrics[groupcode],
-      groupname: groupNames[groupcode],
-    });
-  } else res.status(400).send();
 });
 
 const PORT = process.env.PORT || 3000;
