@@ -13,7 +13,7 @@ require("./public/src/auth");
 const axios = require("axios");
 const {
   getAlumnosFromMetricsJson,
-  funcion2,
+  getOtherMetricsJson,
 } = require("./public/src/functions");
 const app = express();
 
@@ -144,13 +144,25 @@ async function fetchProjectMetrics() {
 fetchProjectMetrics();
 setInterval(fetchProjectMetrics, 6000000);
 
-app.get("/api/projects/:projectName", (req, res) => {
+app.get("/api/projects/:projectName/usersmetrics", (req, res) => {
   const { projectName } = req.params;
   const projectMetrics = metricsByProject[projectName];
   console.log("LLAMADA");
   if (projectMetrics) {
     res.json(getAlumnosFromMetricsJson(projectMetrics));
     console.log(getAlumnosFromMetricsJson(projectMetrics));
+  } else {
+    res.status(404).json({ error: `Project '${projectName}' not found` });
+  }
+});
+
+app.get("/api/projects/:projectName/projectmetrics", (req, res) => {
+  const { projectName } = req.params;
+  const projectMetrics = metricsByProject[projectName];
+  console.log("LLAMADA");
+  if (projectMetrics) {
+    res.json(getOtherMetricsJson(projectMetrics));
+    console.log(getOtherMetricsJson(projectMetrics));
   } else {
     res.status(404).json({ error: `Project '${projectName}' not found` });
   }
