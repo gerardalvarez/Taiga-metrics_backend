@@ -11,7 +11,10 @@ const http = require("http");
 var path = require("path");
 require("./public/src/auth");
 const axios = require("axios");
-
+const {
+  getAlumnosFromMetricsJson,
+  funcion2,
+} = require("./public/src/functions");
 const app = express();
 
 /* const { Pool } = require("pg");
@@ -86,7 +89,73 @@ function fetchProjectNames() {
 }
 
 fetchProjectNames();
-setInterval(fetchProjectNames, 60000);
+setInterval(fetchProjectNames, 6000000);
+
+async function fetchData(link) {
+  try {
+    const response = await axios.get(link);
+    if (response && response.data) {
+      return response.data;
+    } else {
+      console.log(`No data found for ${link}`);
+      return undefined;
+    }
+  } catch (error) {
+    if (error.response && error.response.status === 400) {
+      console.log(`Error 400 for ${link}:`, error.response.data);
+    } else {
+      console.log(`Error fetching data for ${link}:`, error.message);
+    }
+    return undefined;
+  }
+}
+
+const metricsByProject = {};
+
+async function fetchProjectMetrics() {
+  try {
+    const response = await axios.get(
+      "http://gessi-dashboard.essi.upc.edu:8888/api/projects"
+    );
+    const projectNames = response.data.map((project) => project.name);
+    console.log("Project names:", projectNames);
+
+    const metricsPromises = projectNames.map((projectName) => {
+      const link = `http://gessi-dashboard.essi.upc.edu:8888/api/metrics/current?prj=${projectName}`;
+      return fetchData(link).then((data) => ({ projectName, data }));
+    });
+
+    const metricsResponses = await Promise.all(metricsPromises);
+    const metricsData = metricsResponses.filter(
+      (response) => response !== undefined
+    );
+
+    metricsData.forEach((response) => {
+      const { projectName, data } = response;
+      metricsByProject[projectName] = data;
+    });
+
+    console.log("Metrics by project:", metricsByProject);
+  } catch (error) {
+    console.log(error);
+  }
+}
+
+fetchProjectMetrics();
+setInterval(fetchProjectMetrics, 6000000);
+
+app.get("/api/projects/:projectName", (req, res) => {
+  const { projectName } = req.params;
+  const projectMetrics = metricsByProject[projectName];
+  console.log("LLAMADA");
+  if (projectMetrics) {
+    res.json(getAlumnosFromMetricsJson(projectMetrics));
+    console.log(getAlumnosFromMetricsJson(projectMetrics));
+  } else {
+    res.status(404).json({ error: `Project '${projectName}' not found` });
+  }
+});
+
 //GET base
 app.get("/", function (req, res) {
   res.render("index.html");
