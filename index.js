@@ -9,7 +9,6 @@ const passport = require("passport");
 const bodyParser = require("body-parser");
 const http = require("http");
 var path = require("path");
-require("./public/src/auth");
 const axios = require("axios");
 const {
   getAlumnosFromMetricsJson,
@@ -50,8 +49,6 @@ app.use(
   })
 );
 
-app.use(passport.initialize());
-app.use(passport.session());
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
 app.use(cors());
