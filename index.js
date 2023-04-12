@@ -132,7 +132,7 @@ async function fetchProjectMetrics() {
       metricsByProject[projectName] = data;
     });
 
-    console.log("Metrics by project:", metricsByProject);
+    console.log("Metrics by project:loaded");
   } catch (error) {
     console.log(error);
   }
@@ -140,6 +140,30 @@ async function fetchProjectMetrics() {
 
 fetchProjectMetrics();
 setInterval(fetchProjectMetrics, 6000000);
+
+let metricsCategories = {};
+
+async function fetchMetricsCategories() {
+  try {
+    const response = await axios.get(
+      "http://gessi-dashboard.essi.upc.edu:8888/api/metrics/categories"
+    );
+    const cat = [...new Set(response.data.map((obj) => obj.name))];
+
+    metricsCategories = {};
+    for (let name of cat) {
+      metricsCategories[name] = response.data.filter(
+        (obj) => obj.name === name
+      );
+    }
+    console.log("Categories names: loaded");
+  } catch (error) {
+    console.log(error);
+  }
+}
+
+fetchMetricsCategories();
+setInterval(fetchMetricsCategories, 6000000);
 
 app.get("/api/projects/:projectName/usersmetrics", (req, res) => {
   const { projectName } = req.params;
@@ -162,6 +186,15 @@ app.get("/api/projects/:projectName/projectmetrics", (req, res) => {
     //console.log(getOtherMetricsJson(projectMetrics));
   } else {
     res.status(404).json({ error: `Project '${projectName}' not found` });
+  }
+});
+
+app.get("/api/projects/metricscategories", (req, res) => {
+  console.log("LLAMADA2");
+  if (metricsCategories) {
+    res.json(metricsCategories);
+  } else {
+    res.status(404).json({ error: "Categories not found" });
   }
 });
 
