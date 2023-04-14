@@ -150,13 +150,36 @@ async function fetchMetricsCategories() {
     );
     const cat = [...new Set(response.data.map((obj) => obj.name))];
 
-    metricsCategories = {};
+    const aux = {};
     for (let name of cat) {
-      metricsCategories[name] = response.data.filter(
-        (obj) => obj.name === name
-      );
+      aux[name] = response.data.filter((obj) => obj.name === name);
     }
-    console.log("Categories names: loaded");
+
+    for (var atributo in aux) {
+      var valores = aux[atributo]
+        .map(function (objeto) {
+          return objeto.upperThreshold;
+        })
+        .reverse();
+
+      valores.unshift(0);
+
+      metricsCategories[atributo] = {
+        values: valores,
+        colors: aux[atributo]
+          .map(function (objeto) {
+            return objeto.color;
+          })
+          .reverse(),
+        type: aux[atributo]
+          .map(function (objeto) {
+            return objeto.type;
+          })
+          .reverse(),
+      };
+    }
+
+    console.log("Categories names: loaded", metricsCategories);
   } catch (error) {
     console.log(error);
   }
@@ -164,6 +187,21 @@ async function fetchMetricsCategories() {
 
 fetchMetricsCategories();
 setInterval(fetchMetricsCategories, 6000000);
+
+function createCustomJSON(data, attribute) {
+  const customJSON = {};
+  if (data[`${attribute} members contribution`]) {
+    customJSON.memberscontribution = data[`${attribute} members contribution`];
+  }
+  if (data.Deviation) {
+    customJSON.Deviation = data.Deviation;
+  }
+  if (data.Default) {
+    customJSON.Default = data.Default;
+  }
+
+  return customJSON;
+}
 
 app.get("/api/projects/:projectName/usersmetrics", (req, res) => {
   const { projectName } = req.params;
@@ -189,10 +227,20 @@ app.get("/api/projects/:projectName/projectmetrics", (req, res) => {
   }
 });
 
-app.get("/api/projects/metricscategories", (req, res) => {
-  console.log("LLAMADA2");
-  if (metricsCategories) {
-    res.json(metricsCategories);
+app.get("/api/projects/:projectName/metricscategories", (req, res) => {
+  console.log("LLAMADA3");
+  const { projectName } = req.params;
+  const projectMetrics = metricsByProject[projectName];
+  if (metricsCategories && projectMetrics) {
+    var result = {};
+    metricsByProject;
+    console.log(Object.keys(getAlumnosFromMetricsJson(projectMetrics)).length);
+    result = createCustomJSON(
+      metricsCategories,
+      Object.keys(getAlumnosFromMetricsJson(projectMetrics)).length
+    );
+    console.log(result);
+    res.json(result);
   } else {
     res.status(404).json({ error: "Categories not found" });
   }
