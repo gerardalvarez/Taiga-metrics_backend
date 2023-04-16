@@ -16,6 +16,13 @@ const {
 } = require("./public/src/functions");
 const app = express();
 
+const { Configuration, OpenAIApi } = require("openai");
+
+const configuration = new Configuration({
+  apiKey: "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",
+});
+const openai = new OpenAIApi(configuration);
+
 /* const { Pool } = require("pg");
 
 const pool = new Pool({
@@ -203,6 +210,32 @@ function createCustomJSON(data, attribute) {
   return customJSON;
 }
 
+function createprompt(projectMetrics) {
+  const metrics = getAlumnosFromMetricsJson(projectMetrics);
+  const num = Object.keys(metrics).length;
+
+  let prompt = `I have a software project composed by ${num} team members. For managemnt it is used taiga and
+  for control version git. I have some metrics of the project for each team member at this moment of the project. `;
+  var i = 1;
+  var studentString = "";
+  for (student in metrics) {
+    console.log(metrics[student]);
+    studentString = `\n${i}. ${student} : hola.`;
+    metrics[student].forEach((element) => {
+      studentString = studentString + `${element.name} = ${element.value}; `;
+    });
+
+    prompt = prompt + studentString;
+    ++i;
+  }
+
+  prompt =
+    prompt +
+    "\nDo an evaluation and also mention how each member can improve it's performance";
+  console.log(prompt);
+  return prompt;
+}
+
 app.get("/api/projects/:projectName/usersmetrics", (req, res) => {
   const { projectName } = req.params;
   const projectMetrics = metricsByProject[projectName];
@@ -226,6 +259,47 @@ app.get("/api/projects/:projectName/projectmetrics", (req, res) => {
     res.status(404).json({ error: `Project '${projectName}' not found` });
   }
 });
+
+app.get(
+  "/api/projects/:projectName/evaluate/projectmetrics",
+  async (req, res) => {
+    const { projectName } = req.params;
+    const projectMetrics = metricsByProject[projectName];
+    console.log("LLAMADA2");
+    if (projectMetrics) {
+      const promptproj = createprompt(projectMetrics);
+      /* axios
+        .post(
+          "https://api.openai.com/v1/chat/completions",
+          {
+            model: "gpt-3.5-turbo",
+            messages: [{ role: "user", content: promptproj }],
+          },
+          {
+            headers: {
+              "Content-Type": "application/json",
+              Authorization:
+                "Bearer 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",
+            },
+          }
+        )
+        .then((response) => {
+          console.log(response.data.choices[0].message.content);
+          res.json(response.data.choices[0].message.content);
+        })
+        .catch((error) => {
+          res.json({error: error.response.data.error});
+        }); */
+      res.json(
+        "Based on these metrics, it seems that ArnauRuesga has not been very active in contributing to the project. He has not completed many tasks or closed many tasks, and has not made any commits or modified any lines. He could improve his performance by setting more specific goals for himself and striving to make regular contributions to the project.\n\nDanieru085 has completed a decent number of tasks and closed a fair amount, but his commit rate and modified lines rate could be improved. He could aim to make more frequent commits and strive to make more significant code changes.\n\nDmolinamesa01 has completed a decent number of tasks and closed a high percentage of them, and has also made many commits and modified a large amount of code. However, he should still strive to maintain consistency in his contributions and not burn out too quickly.\n\nJordicolome789 has completed a fair number of tasks but has not closed any, made any commits or modified any lines. They could improve their performance by setting more specific goals and being more proactive in their contributions.\n\nLluisrubio has completed a fair number of tasks and closed a decent percentage of them, but has not made any commits or modified any lines. They could aim to make more frequent contributions through commits and strive to make more significant code changes.\n\nOverall, each team member has room for improvement in their contributions to the project. Some things they can do to improve include setting specific goals, striving for consistency, being proactive in their contributions, and making more significant code changes"
+      );
+    } else {
+      return res
+        .status(404)
+        .json({ error: `Project '${projectName}' not found` });
+    }
+  }
+);
 
 app.get("/api/projects/:projectName/metricscategories", (req, res) => {
   console.log("LLAMADA3");
