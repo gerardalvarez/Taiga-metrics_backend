@@ -26,6 +26,7 @@ const openai = new OpenAIApi(configuration);
 const bcrypt = require("bcrypt");
 const { Pool } = require("pg");
 const { lookupService } = require("dns/promises");
+const { isNumber } = require("util");
 
 const pool = new Pool({
   user: "postgres",
@@ -129,6 +130,7 @@ const ProjectmetricsByProject = {};
 
 async function fetchProjectMetrics() {
   try {
+    var metricsaux = metricsByProject;
     const response = await axios.get(
       "http://gessi-dashboard.essi.upc.edu:8888/api/projects"
     );
@@ -138,7 +140,8 @@ async function fetchProjectMetrics() {
     const metricsPromises = projectNames.map(async (projectName) => {
       const link = `http://gessi-dashboard.essi.upc.edu:8888/api/metrics/current?prj=${projectName}`;
       var retry = true;
-      while (retry) {
+      var try_number = 0;
+      while (retry && try_number < 5) {
         try {
           const response = await axios.get(link);
           retry = false;
@@ -154,6 +157,15 @@ async function fetchProjectMetrics() {
             await new Promise((resolve) => setTimeout(resolve, 5000));
             retry = true;
           }
+          ++try_number;
+        }
+      }
+      if (try_number >= 5) {
+        console.log(
+          "Metrics cannot be fetched, keeping the last saved version of the metrics"
+        );
+        if (metricsaux[projectName]) {
+          metricsByProject[projectName] = metricsaux[projectName];
         }
       }
     });
@@ -166,12 +178,8 @@ async function fetchProjectMetrics() {
     metricsData.forEach((response) => {
       const { projectName, data } = response;
       ProjectmetricsByProject[projectName] = getOtherMetricsJson(data);
-      // console.log(getOtherMetricsJson(data));
       metricsByProject[projectName] = getAlumnosFromMetricsJson(data);
-      //  console.log("------------");
-      //if (projectName === "pes11a") console.log(metricsByProject[projectName]);
     });
-    //console.log(metricsByProject);
 
     console.log("Metrics by project:loaded");
   } catch (error) {
@@ -208,8 +216,12 @@ async function fetchProjectMetrics() {
       metricsByProject[nombreProyecto] = taigaNames;
     }
     console.log("Usernames from github and taiga of the metrics mapped");
+    // console.log(metricsByProject);
   } catch (error) {
     console.error(error);
+    console.log(
+      "\n Usernames from github and taiga of the metrics cannot be mapped so it will be treated as separated students due an error in quering postgres database"
+    );
     // Aquí puedes manejar el error
   }
 }
