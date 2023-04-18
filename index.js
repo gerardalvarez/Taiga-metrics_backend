@@ -295,6 +295,9 @@ function createCustomJSON(data, attribute) {
   if (data.Default) {
     customJSON.Default = data.Default;
   }
+  if (data["Reversed Default"]) {
+    customJSON.RDefault = data["Reversed Default"];
+  }
 
   return customJSON;
 }
@@ -400,7 +403,7 @@ app.get("/api/projects/:projectName/metricscategories", (req, res) => {
   if (metricsCategories && projectMetrics) {
     var result = {};
     metricsByProject;
-    //console.log(Object.keys(projectMetrics).length);
+    //console.log(metricsCategories);
     result = createCustomJSON(
       metricsCategories,
       Object.keys(projectMetrics).length
