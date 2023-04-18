@@ -23,7 +23,8 @@ const configuration = new Configuration({
 });
 const openai = new OpenAIApi(configuration);
 
-/* const { Pool } = require("pg");
+const { Pool } = require("pg");
+const { lookupService } = require("dns/promises");
 
 const pool = new Pool({
   user: "postgres",
@@ -41,13 +42,23 @@ pool.query("SELECT NOW()", (err, res) => {
   }
 });
 
-pool.query("SELECT * FROM appuser", (error, results) => {
+/* pool.query("SELECT * FROM appuser", (error, results) => {
   if (error) {
     throw error;
   }
   console.log(results.rows);
-});
- */
+}); */
+
+pool.query(
+  "select s.taiga_username, s.github_username from student s join project p on (s.projectid = p.id) where p.externalid='pes11a'",
+  (error, results) => {
+    if (error) {
+      throw error;
+    }
+    console.log(results.rows);
+  }
+);
+
 app.use(cookieParser());
 app.use(
   cookieSession({
@@ -79,6 +90,21 @@ cron.schedule("0 2 * * *", function () {
   }
 });
  */
+
+async function getUsernamesGitTaiga(project) {
+  try {
+    const { rows } = await pool.query(
+      `SELECT s.taiga_username, s.github_username FROM student s JOIN project p ON (s.projectid = p.id) WHERE p.externalid = $1`,
+      [project]
+    );
+    //console.log(rows);
+    // Aquí puedes hacer algo con los resultados de la consulta
+    return rows;
+  } catch (error) {
+    console.error(error);
+    // Aquí puedes manejar el error
+  }
+}
 
 let projectNames = [];
 
@@ -115,6 +141,7 @@ async function fetchData(link) {
 }
 
 const metricsByProject = {};
+const ProjectmetricsByProject = {};
 
 async function fetchProjectMetrics() {
   try {
@@ -136,12 +163,52 @@ async function fetchProjectMetrics() {
 
     metricsData.forEach((response) => {
       const { projectName, data } = response;
-      metricsByProject[projectName] = data;
+      ProjectmetricsByProject[projectName] = getOtherMetricsJson(data);
+      // console.log(getOtherMetricsJson(data));
+      metricsByProject[projectName] = getAlumnosFromMetricsJson(data);
+      //  console.log("------------");
+      //if (projectName === "pes11a") console.log(metricsByProject[projectName]);
     });
+    //console.log(metricsByProject);
 
     console.log("Metrics by project:loaded");
   } catch (error) {
     console.log(error);
+  }
+  try {
+    for (const [nombreProyecto, json] of Object.entries(metricsByProject)) {
+      const mapping = await getUsernamesGitTaiga(nombreProyecto);
+      if (nombreProyecto === "pes11a") {
+        //console.log(metricsByProject[nombreProyecto]);
+        //console.log("----------------------");
+      }
+      const taigaNames = {};
+
+      for (const item of mapping) {
+        const taigaName = item.taiga_username;
+        const githubName = item.github_username;
+        taigaNames[taigaName] = [];
+        taigaNames[taigaName] = metricsByProject[nombreProyecto][taigaName];
+        if (metricsByProject[nombreProyecto].hasOwnProperty(githubName)) {
+          const set = new Set(taigaNames[taigaName]);
+          for (const obj of metricsByProject[nombreProyecto][githubName]) {
+            if (!set.has(obj)) {
+              if (taigaNames[taigaName] == undefined)
+                taigaNames[taigaName] = [];
+              taigaNames[taigaName].push(obj);
+              set.add(obj);
+            }
+          }
+        }
+      }
+
+      // Sobrescribir el JSON actual con el nuevo JSON
+      metricsByProject[nombreProyecto] = taigaNames;
+    }
+    console.log("Transformed");
+  } catch (error) {
+    console.error(error);
+    // Aquí puedes manejar el error
   }
 }
 
@@ -232,7 +299,7 @@ function createprompt(projectMetrics) {
   prompt =
     prompt +
     "\nDo an evaluation and also mention how each member can improve it's performance";
-  console.log(prompt);
+  //console.log(prompt);
   return prompt;
 }
 
@@ -241,7 +308,7 @@ app.get("/api/projects/:projectName/usersmetrics", (req, res) => {
   const projectMetrics = metricsByProject[projectName];
   console.log("LLAMADA");
   if (projectMetrics) {
-    res.json(getAlumnosFromMetricsJson(projectMetrics));
+    res.json(projectMetrics);
     //console.log(getAlumnosFromMetricsJson(projectMetrics));
   } else {
     res.status(404).json({ error: `Project '${projectName}' not found` });
@@ -250,10 +317,10 @@ app.get("/api/projects/:projectName/usersmetrics", (req, res) => {
 
 app.get("/api/projects/:projectName/projectmetrics", (req, res) => {
   const { projectName } = req.params;
-  const projectMetrics = metricsByProject[projectName];
+  const projectMetrics = ProjectmetricsByProject[projectName];
   console.log("LLAMADA2");
   if (projectMetrics) {
-    res.json(getOtherMetricsJson(projectMetrics));
+    res.json(projectMetrics);
     //console.log(getOtherMetricsJson(projectMetrics));
   } else {
     res.status(404).json({ error: `Project '${projectName}' not found` });
@@ -308,15 +375,50 @@ app.get("/api/projects/:projectName/metricscategories", (req, res) => {
   if (metricsCategories && projectMetrics) {
     var result = {};
     metricsByProject;
-    console.log(Object.keys(getAlumnosFromMetricsJson(projectMetrics)).length);
+    console.log(Object.keys(projectMetrics).length);
     result = createCustomJSON(
       metricsCategories,
-      Object.keys(getAlumnosFromMetricsJson(projectMetrics)).length
+      Object.keys(projectMetrics).length
     );
-    console.log(result);
+    //console.log(result);
     res.json(result);
   } else {
     res.status(404).json({ error: "Categories not found" });
+  }
+});
+
+app.post("/login", async (req, res) => {
+  const { username, password } = req.body;
+
+  try {
+    // Retrieve the user's record from the database
+    const result = await pool.query(
+      "SELECT * FROM appuser WHERE username = $1",
+      [username]
+    );
+    const user = result.rows[0];
+
+    // If the user was not found, return an error response
+    if (!user) {
+      return res.status(401).json({ error: "Invalid username or password" });
+    }
+
+    // Extract the hashed password from the user's record
+    const hashedPassword = user.password;
+
+    // Hash the password the user provided using the same algorithm and salt value
+    const isMatch = await bcrypt.compare(password, hashedPassword);
+
+    // Compare the resulting hash with the stored hash
+    if (!isMatch) {
+      return res.status(401).json({ error: "Invalid username or password" });
+    }
+
+    // If the hashes match, the user is authenticated
+    res.json({ message: "Login successful" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
   }
 });
 

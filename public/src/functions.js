@@ -18,13 +18,13 @@ function getAlumnosFromMetricsJson(metricsJson) {
   ];
 
   for (const metric of metricsJson) {
-    const { id, qualityFactors } = metric;
-    const username = id.substring(id.indexOf("_") + 1);
+    const { name, qualityFactors } = metric;
+    const username = name.substring(0, name.indexOf(" "));
 
     if (
       qualityFactors.some((factor) => qualityFactorsOptions.includes(factor))
     ) {
-      if (!alumnos.some((e) => e.toLowerCase() === username.toLowerCase())) {
+      if (!alumnos.some((e) => e === username)) {
         alumnos.push(username);
       }
     }
@@ -35,16 +35,16 @@ function getAlumnosFromMetricsJson(metricsJson) {
   alumnos.forEach((id) => {
     resultado[id] = [];
     metricsJson.forEach((dato) => {
-      if (dato.id.includes(id)) {
+      if (dato.name.includes(id)) {
         resultado[id].push(dato);
       }
     });
   });
-  delete resultado["anonymous"];
+  delete resultado["'Anonymous'"];
 
   const objetoOrdenado = {};
   const keys = Object.keys(resultado).sort((keyA, keyB) =>
-    keyA.toLowerCase().localeCompare(keyB.toLowerCase())
+    keyA.localeCompare(keyB)
   );
   for (const key of keys) {
     objetoOrdenado[key] = resultado[key];
