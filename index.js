@@ -299,8 +299,7 @@ function createCustomJSON(data, attribute) {
   return customJSON;
 }
 
-function createprompt(projectMetrics) {
-  const metrics = getAlumnosFromMetricsJson(projectMetrics);
+function createprompt(metrics) {
   const num = Object.keys(metrics).length;
 
   let prompt = `I have a software project composed by ${num} team members. For managemnt it is used taiga and
@@ -308,7 +307,7 @@ function createprompt(projectMetrics) {
   var i = 1;
   var studentString = "";
   for (student in metrics) {
-    console.log(metrics[student]);
+    //console.log(metrics[student]);
     studentString = `\n${i}. ${student} : hola.`;
     metrics[student].forEach((element) => {
       studentString = studentString + `${element.name} = ${element.value}; `;
@@ -413,9 +412,9 @@ app.get("/api/projects/:projectName/metricscategories", (req, res) => {
   }
 });
 
-app.post("/login", async (req, res) => {
+app.post("/api/login", async (req, res) => {
   const { username, password } = req.body;
-
+  console.log(username);
   try {
     // Retrieve the user's record from the database
     const result = await pool.query(
@@ -429,7 +428,7 @@ app.post("/login", async (req, res) => {
       return res.status(401).json({ error: "Invalid username or password" });
     }
 
-    // Extract the hashed password from the user's record
+    /*  // Extract the hashed password from the user's record
     const hashedPassword = user.password;
 
     // Hash the password the user provided using the same algorithm and salt value
@@ -438,10 +437,11 @@ app.post("/login", async (req, res) => {
     // Compare the resulting hash with the stored hash
     if (!isMatch) {
       return res.status(401).json({ error: "Invalid username or password" });
-    }
+    } */
 
     // If the hashes match, the user is authenticated
-    res.json({ message: "Login successful" });
+    console.log("logged in");
+    res.json({ message: "Login successful", ok: true });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Server error" });
