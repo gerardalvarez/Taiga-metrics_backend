@@ -23,6 +23,7 @@ const configuration = new Configuration({
 });
 const openai = new OpenAIApi(configuration);
 
+const bcrypt = require("bcrypt");
 const { Pool } = require("pg");
 const { lookupService } = require("dns/promises");
 
@@ -41,23 +42,6 @@ pool.query("SELECT NOW()", (err, res) => {
     console.log("Conexión exitosa a la base de datos:", res.rows[0].now);
   }
 });
-
-/* pool.query("SELECT * FROM appuser", (error, results) => {
-  if (error) {
-    throw error;
-  }
-  console.log(results.rows);
-}); */
-
-pool.query(
-  "select s.taiga_username, s.github_username from student s join project p on (s.projectid = p.id) where p.externalid='pes11a'",
-  (error, results) => {
-    if (error) {
-      throw error;
-    }
-    console.log(results.rows);
-  }
-);
 
 app.use(cookieParser());
 app.use(
@@ -113,7 +97,7 @@ function fetchProjectNames() {
     .get("http://gessi-dashboard.essi.upc.edu:8888/api/projects")
     .then((response) => {
       projectNames = response.data.map((project) => project.name);
-      console.log("Project names updated:", projectNames);
+      console.log("Project names updated");
     })
     .catch((error) => console.log(error));
 }
@@ -121,7 +105,7 @@ function fetchProjectNames() {
 fetchProjectNames();
 setInterval(fetchProjectNames, 6000000);
 
-async function fetchData(link) {
+/* async function fetchData(link) {
   try {
     const response = await axios.get(link);
     if (response && response.data) {
@@ -138,7 +122,7 @@ async function fetchData(link) {
     }
     return undefined;
   }
-}
+} */
 
 const metricsByProject = {};
 const ProjectmetricsByProject = {};
@@ -151,9 +135,27 @@ async function fetchProjectMetrics() {
     const projectNames = response.data.map((project) => project.name);
     console.log("Project names:", projectNames);
 
-    const metricsPromises = projectNames.map((projectName) => {
+    const metricsPromises = projectNames.map(async (projectName) => {
       const link = `http://gessi-dashboard.essi.upc.edu:8888/api/metrics/current?prj=${projectName}`;
-      return fetchData(link).then((data) => ({ projectName, data }));
+      var retry = true;
+      while (retry) {
+        try {
+          const response = await axios.get(link);
+          retry = false;
+          console.log("Loaded metrics of project -> " + projectName);
+          return { projectName, data: response.data };
+        } catch (error) {
+          if (error.response && error.response.status === 400) {
+            console.log(`Error 400 for ${link}:`, error.response.data);
+            retry = true;
+          } else {
+            console.log(`Error fetching data for ${link}:`, error.message);
+            console.log("Retrying in 5 seconds...");
+            await new Promise((resolve) => setTimeout(resolve, 5000));
+            retry = true;
+          }
+        }
+      }
     });
 
     const metricsResponses = await Promise.all(metricsPromises);
@@ -205,7 +207,7 @@ async function fetchProjectMetrics() {
       // Sobrescribir el JSON actual con el nuevo JSON
       metricsByProject[nombreProyecto] = taigaNames;
     }
-    console.log("Transformed");
+    console.log("Usernames from github and taiga of the metrics mapped");
   } catch (error) {
     console.error(error);
     // Aquí puedes manejar el error
@@ -253,7 +255,7 @@ async function fetchMetricsCategories() {
       };
     }
 
-    console.log("Categories names: loaded", metricsCategories);
+    console.log("Categories of each project: loaded");
   } catch (error) {
     console.log(error);
   }
@@ -379,12 +381,12 @@ app.get("/api/projects/:projectName/metricscategories", (req, res) => {
   if (metricsCategories && projectMetrics) {
     var result = {};
     metricsByProject;
-    console.log(Object.keys(projectMetrics).length);
+    //console.log(Object.keys(projectMetrics).length);
     result = createCustomJSON(
       metricsCategories,
       Object.keys(projectMetrics).length
     );
-    console.log(result);
+    //console.log(result);
     res.json(result);
   } else {
     res.status(404).json({ error: "Categories not found" });
