@@ -131,6 +131,7 @@ const ProjectmetricsByProject = {};
 async function fetchProjectMetrics() {
   try {
     var metricsaux = metricsByProject;
+    var projectmetricsaux = ProjectmetricsByProject;
     const response = await axios.get(
       "http://gessi-dashboard.essi.upc.edu:8888/api/projects"
     );
@@ -166,6 +167,9 @@ async function fetchProjectMetrics() {
         );
         if (metricsaux[projectName]) {
           metricsByProject[projectName] = metricsaux[projectName];
+        }
+        if (projectmetricsaux[projectName]) {
+          ProjectmetricsByProject[projectName] = projectmetricsaux[projectName];
         }
       }
     });
@@ -325,10 +329,13 @@ app.get("/api/projects/:projectName/usersmetrics", (req, res) => {
   const { projectName } = req.params;
   const projectMetrics = metricsByProject[projectName];
   console.log("LLAMADA");
+  // console.log(projectMetrics);
   if (projectMetrics) {
     res.json(projectMetrics);
+
     //console.log(getAlumnosFromMetricsJson(projectMetrics));
   } else {
+    console.log("Error");
     res.status(404).json({ error: `Project '${projectName}' not found` });
   }
 });
@@ -336,10 +343,11 @@ app.get("/api/projects/:projectName/usersmetrics", (req, res) => {
 app.get("/api/projects/:projectName/projectmetrics", (req, res) => {
   const { projectName } = req.params;
   const projectMetrics = ProjectmetricsByProject[projectName];
+  //console.log(ProjectmetricsByProject);
   console.log("LLAMADA2");
   if (projectMetrics) {
     res.json(projectMetrics);
-    //console.log(getOtherMetricsJson(projectMetrics));
+    //console.log(projectMetrics);
   } else {
     res.status(404).json({ error: `Project '${projectName}' not found` });
   }
