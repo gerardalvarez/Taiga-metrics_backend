@@ -264,8 +264,12 @@ setInterval(fetchMetricsCategories, 6000000);
 
 function createCustomJSON(data, attribute) {
   const customJSON = {};
+
   if (data[`${attribute} members contribution`]) {
     customJSON.memberscontribution = data[`${attribute} members contribution`];
+  }
+  if (data[`${attribute} members contributon`]) {
+    customJSON.memberscontribution = data[`${attribute} members contributon`];
   }
   if (data.Deviation) {
     customJSON.Deviation = data.Deviation;
@@ -380,7 +384,7 @@ app.get("/api/projects/:projectName/metricscategories", (req, res) => {
       metricsCategories,
       Object.keys(projectMetrics).length
     );
-    //console.log(result);
+    console.log(result);
     res.json(result);
   } else {
     res.status(404).json({ error: "Categories not found" });
