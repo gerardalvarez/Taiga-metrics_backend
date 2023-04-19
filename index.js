@@ -1,11 +1,9 @@
 require("dotenv").config();
 
-const cron = require("node-cron");
 const express = require("express");
 const cookieSession = require("cookie-session");
 var cookieParser = require("cookie-parser");
 const cors = require("cors");
-const passport = require("passport");
 const bodyParser = require("body-parser");
 const http = require("http");
 var path = require("path");
@@ -16,17 +14,8 @@ const {
 } = require("./public/src/functions");
 const app = express();
 
-const { Configuration, OpenAIApi } = require("openai");
-
-const configuration = new Configuration({
-  apiKey: "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",
-});
-const openai = new OpenAIApi(configuration);
-
 const bcrypt = require("bcrypt");
 const { Pool } = require("pg");
-const { lookupService } = require("dns/promises");
-const { isNumber } = require("util");
 
 const pool = new Pool({
   user: "postgres",
@@ -34,14 +23,6 @@ const pool = new Pool({
   database: "postgres",
   password: "example",
   port: 5433,
-});
-
-pool.query("SELECT NOW()", (err, res) => {
-  if (err) {
-    console.error("Error al conectar a la base de datos", err.stack);
-  } else {
-    console.log("Conexión exitosa a la base de datos:", res.rows[0].now);
-  }
 });
 
 app.use(cookieParser());
@@ -60,38 +41,36 @@ app.use(express.static(__dirname + "/public"));
 app.engine("html", require("ejs").renderFile);
 app.set("view engine", "ejs");
 
-//VARIABLES
-var metrics = {};
-
-//CANVIAR EL PRIMER GRUP
-
-/* //EVERY NIGHT AT 02:00AM
-cron.schedule("0 2 * * *", function () {
-  for (let index = 0; index < groups.length; ++index) {
-    let groupcode = groups[index];
-    setTimeout(() => {
-      getMetrics(groupcode);
-    }, 3000);
+//Compobación conexión a postgres
+pool.query("SELECT NOW()", (err, res) => {
+  if (err) {
+    console.error("Error al conectar a la base de datos", err.stack);
+  } else {
+    console.log("Conexión exitosa a la base de datos:", res.rows[0].now);
   }
 });
- */
 
+/**
+ * Obtiene los nombres de usuario de Taiga y GitHub de los estudiantes asociados a un proyecto.
+ *
+ * @param {string} project - Identificador externo del proyecto del que se quieren obtener los nombres de usuario.
+ * @returns {Array<Object>} - Un array de objetos que contiene los nombres de usuario de Taiga y GitHub de los estudiantes asociados al proyecto
+ * @returns {Array<Object>} - Un array de objetos que contiene los nombres de usuario de Taiga y GitHub de los estudiantes asociados al proyecto.
+ * Cada objeto tiene dos propiedades: taiga_username y github_username.
+ */
 async function getUsernamesGitTaiga(project) {
   try {
     const { rows } = await pool.query(
       `SELECT s.taiga_username, s.github_username FROM student s JOIN project p ON (s.projectid = p.id) WHERE p.externalid = $1`,
       [project]
     );
-    //console.log(rows);
-    // Aquí puedes hacer algo con los resultados de la consulta
     return rows;
   } catch (error) {
     console.error(error);
-    // Aquí puedes manejar el error
   }
 }
 
-let projectNames = [];
+/* let projectNames = [];
 
 function fetchProjectNames() {
   axios
@@ -104,40 +83,37 @@ function fetchProjectNames() {
 }
 
 fetchProjectNames();
-setInterval(fetchProjectNames, 6000000);
+setInterval(fetchProjectNames, 6000000); */
 
-/* async function fetchData(link) {
-  try {
-    const response = await axios.get(link);
-    if (response && response.data) {
-      return response.data;
-    } else {
-      console.log(`No data found for ${link}`);
-      return undefined;
-    }
-  } catch (error) {
-    if (error.response && error.response.status === 400) {
-      console.log(`Error 400 for ${link}:`, error.response.data);
-    } else {
-      console.log(`Error fetching data for ${link}:`, error.message);
-    }
-    return undefined;
-  }
-} */
-
+//VARIABLE GLOBAL DONDE SE ALMACENAN LAS MÉTRICAS DE CADA ALUMNO EN CADA PROYECTO.
 const metricsByProject = {};
+
+//VARIABLE  GLOBAL DONDE SE ALMACENAN LAS MÉTRICAS GENERALES DEL PROYECTO EN CADA PROYECTO.
 const ProjectmetricsByProject = {};
 
+/**
+ * Hace una llamada a la api y obtiene Todos los proyectos. Luego para cada proyecto hace una llamada para obtener sus metricas. Si falla lo vuelve a intentar hasta 5 veces.
+ * Si falla las 5 veces en vez de sobreescribir la variable global se recupera la anterior version guardada en una variable local auxiliar. Siguiente a eso filtra los jsons obtenidos
+ * para separarlos por alumno y tipo de métrica para poder hacer el filtro en la aplicación. Como los nombres de usuario de taiga y github pueden ser distintos, se trantan como diferentes
+ * alumnos. Por eso luego se hace un mapeo de los nombres y se guardan las métricas de los dos nombres en el de Taiga. Finalmente se guarda todo en la variable global metricsByProject.
+ * Las métricas generales del proyecto no hace falta hacer el mapeo, se guardan ates en la variable global ProjectmetricsByProject.
+ *
+ * @returns {void}
+ */
 async function fetchProjectMetrics() {
   try {
+    //Guardar las ultimas métricas por si falla la llamada
     var metricsaux = metricsByProject;
     var projectmetricsaux = ProjectmetricsByProject;
+
+    //LLamada para obtener los nombres de los proyectos
     const response = await axios.get(
       "http://gessi-dashboard.essi.upc.edu:8888/api/projects"
     );
     const projectNames = response.data.map((project) => project.name);
-    console.log("Project names:", projectNames);
+    console.log("Project names :", projectNames);
 
+    //LLamada para obtener las métricas de cada proyecto
     const metricsPromises = projectNames.map(async (projectName) => {
       const link = `http://gessi-dashboard.essi.upc.edu:8888/api/metrics/current?prj=${projectName}`;
       var retry = true;
@@ -155,12 +131,15 @@ async function fetchProjectMetrics() {
           } else {
             console.log(`Error fetching data for ${link}:`, error.message);
             console.log("Retrying in 5 seconds...");
+            //Timeout para esperar 5 segundos a pillar otra vez las métricas del proyecto que ha fallado
             await new Promise((resolve) => setTimeout(resolve, 5000));
             retry = true;
           }
           ++try_number;
         }
       }
+
+      //Si ha fallado 5 veces en las llamadas, recuperar la variable globar anterior
       if (try_number >= 5) {
         console.log(
           "Metrics cannot be fetched, keeping the last saved version of the metrics"
@@ -179,22 +158,23 @@ async function fetchProjectMetrics() {
       (response) => response !== undefined
     );
 
+    //Filtrar los datos obtenidos de forma que la aplicación pueda leerlos fácilmente
     metricsData.forEach((response) => {
       const { projectName, data } = response;
       ProjectmetricsByProject[projectName] = getOtherMetricsJson(data);
       metricsByProject[projectName] = getAlumnosFromMetricsJson(data);
     });
 
-    console.log("Metrics by project:loaded");
+    console.log("Metrics by project: loaded");
   } catch (error) {
     console.log(error);
   }
   try {
+    //Al filtrar los datos, los nombres de los estudiantes puede ser diferentes en taiga y github. Por eso la funcion de filtrado los trata como diferentes estudiantes.
+    //Aqui se obtiene los nombres de usuario y se mapea en uno solo, el de taiga concretamente.
     for (const [nombreProyecto, json] of Object.entries(metricsByProject)) {
       const mapping = await getUsernamesGitTaiga(nombreProyecto);
       if (nombreProyecto === "pes11a") {
-        //console.log(metricsByProject[nombreProyecto]);
-        //console.log("----------------------");
       }
       const taigaNames = {};
 
@@ -216,25 +196,38 @@ async function fetchProjectMetrics() {
         }
       }
 
-      // Sobrescribir el JSON actual con el nuevo JSON
+      //Sobrescribir el JSON actual con el nuevo JSON
       metricsByProject[nombreProyecto] = taigaNames;
     }
     console.log("Usernames from github and taiga of the metrics mapped");
-    // console.log(metricsByProject);
   } catch (error) {
     console.error(error);
     console.log(
       "\n Usernames from github and taiga of the metrics cannot be mapped so it will be treated as separated students due an error in quering postgres database"
     );
-    // Aquí puedes manejar el error
   }
 }
 
+/*
+ * Se llama a la función fetchProjectMetrics() para obtener las métricas de cada proyecto y transformarlas. Es la función más importante.
+ */
 fetchProjectMetrics();
-setInterval(fetchProjectMetrics, 6000000);
 
+/*
+*
+// Se establece un intervalo de tiempo de 24 horas (en milisegundos) para llamar a la función fetchProjectMetrics() de manera periódica.
+*/
+setInterval(fetchProjectMetrics, 86400000);
+
+//VARIABLE GLOBAL PARA LAS CATEGORIAS
 let metricsCategories = {};
 
+/**
+ * Hace una llamada a la api y obtiene las catgegorías métricas. Luego pasa a un formato legible para la aplicación y las guarda en la variable global metricsCategories.
+ * Pasa de tener todo separado a tener 3 arrays en cada categoría: los valores, los colores y los types (LOW,HIGH..)
+ *
+ * @returns {void}
+ */
 async function fetchMetricsCategories() {
   try {
     const response = await axios.get(
@@ -277,9 +270,19 @@ async function fetchMetricsCategories() {
   }
 }
 
+// Se llama a la función fetchMetricsCategories() para obtener las categorías de métricas.
 fetchMetricsCategories();
-setInterval(fetchMetricsCategories, 6000000);
 
+// Se establece un intervalo de tiempo de 24 horas (en milisegundos) para llamar a la función fetchMetricsCategories() de manera periódica.
+setInterval(fetchMetricsCategories, 86400000);
+
+/**
+ * Crea un objeto JSON personalizado a partir de los datos proporcionados y el atributo especificado.
+ *
+ * @param {Object} data - Objeto con los datos de entrada. Es el JSON son las últimas categorías de las métricas guardadas
+ * @param {string} attribute - Atributo utilizado para crear el objeto JSON. Es el numero de estudiantes de cada equipo.
+ * @returns {Object} - Objeto JSON personalizado.
+ */
 function createCustomJSON(data, attribute) {
   const customJSON = {};
 
@@ -302,15 +305,19 @@ function createCustomJSON(data, attribute) {
   return customJSON;
 }
 
+/**
+ * Crea una cadena de texto que describe el proyecto de software y las métricas de desempeño de cada miembro del equipo.
+ *
+ * @param {Object} metrics - Objeto que contiene las métricas de desempeño de cada miembro del equipo.
+ * @returns {string} - Cadena de texto que describe el proyecto de software y las métricas de desempeño de cada miembro del equipo.
+ */
 function createprompt(metrics) {
   const num = Object.keys(metrics).length;
-
   let prompt = `I have a software project composed by ${num} team members. For managemnt it is used taiga and
   for control version git. I have some metrics of the project for each team member at this moment of the project. `;
   var i = 1;
   var studentString = "";
   for (student in metrics) {
-    //console.log(metrics[student]);
     studentString = `\n${i}. ${student} : hola.`;
     metrics[student].forEach((element) => {
       studentString = studentString + `${element.name} = ${element.value}; `;
@@ -323,47 +330,60 @@ function createprompt(metrics) {
   prompt =
     prompt +
     "\nDo an evaluation and also mention how each member can improve it's performance";
-  //console.log(prompt);
   return prompt;
 }
 
+/**
+ * Obtiene las métricas de los usuarios de un proyecto específico.
+ *
+ * @param {Object} req - El objeto de solicitud HTTP, que debe contener el nombre del proyecto en el parámetro de ruta ":projectName".
+ * @param {Object} res - El objeto de respuesta HTTP.
+ * @returns {void}
+ */
 app.get("/api/projects/:projectName/usersmetrics", (req, res) => {
   const { projectName } = req.params;
   const projectMetrics = metricsByProject[projectName];
-  console.log("LLAMADA");
-  // console.log(projectMetrics);
   if (projectMetrics) {
     res.json(projectMetrics);
-
-    //console.log(getAlumnosFromMetricsJson(projectMetrics));
   } else {
     console.log("Error");
     res.status(404).json({ error: `Project '${projectName}' not found` });
   }
 });
 
+/**
+ * Obtiene las métricas de un proyecto específico.
+ *
+ * @param {Object} req - El objeto de solicitud HTTP, que debe contener el nombre del proyecto en el parámetro de ruta ":projectName".
+ * @param {Object} res - El objeto de respuesta HTTP.
+ * @returns {void}
+ */
 app.get("/api/projects/:projectName/projectmetrics", (req, res) => {
   const { projectName } = req.params;
   const projectMetrics = ProjectmetricsByProject[projectName];
-  //console.log(ProjectmetricsByProject);
-  console.log("LLAMADA2");
   if (projectMetrics) {
     res.json(projectMetrics);
-    //console.log(projectMetrics);
   } else {
     res.status(404).json({ error: `Project '${projectName}' not found` });
   }
 });
 
+/**
+ * Obtiene las métricas de evaluación de un proyecto específico.
+ *
+ * @param {Object} req - El objeto de solicitud HTTP, que debe contener el nombre del proyecto en el parámetro de ruta ":projectName".
+ * @param {Object} res - El objeto de respuesta HTTP.
+ * @returns {void}
+ */
 app.get(
   "/api/projects/:projectName/evaluate/projectmetrics",
   async (req, res) => {
     const { projectName } = req.params;
     const projectMetrics = metricsByProject[projectName];
-    console.log("LLAMADA2");
     if (projectMetrics) {
+      //Crea el prompt y hace la llamada a la API de OpenAI de ChatGPT
       const promptproj = createprompt(projectMetrics);
-      /* axios
+      axios
         .post(
           "https://api.openai.com/v1/chat/completions",
           {
@@ -379,15 +399,14 @@ app.get(
           }
         )
         .then((response) => {
-          console.log(response.data.choices[0].message.content);
           res.json(response.data.choices[0].message.content);
         })
         .catch((error) => {
-          res.json({error: error.response.data.error});
-        }); */
-      res.json(
+          res.json({ error: error.response.data.error });
+        });
+      /*  res.json(
         "Based on these metrics, it seems that ArnauRuesga has not been very active in contributing to the project. He has not completed many tasks or closed many tasks, and has not made any commits or modified any lines. He could improve his performance by setting more specific goals for himself and striving to make regular contributions to the project.\n\nDanieru085 has completed a decent number of tasks and closed a fair amount, but his commit rate and modified lines rate could be improved. He could aim to make more frequent commits and strive to make more significant code changes.\n\nDmolinamesa01 has completed a decent number of tasks and closed a high percentage of them, and has also made many commits and modified a large amount of code. However, he should still strive to maintain consistency in his contributions and not burn out too quickly.\n\nJordicolome789 has completed a fair number of tasks but has not closed any, made any commits or modified any lines. They could improve their performance by setting more specific goals and being more proactive in their contributions.\n\nLluisrubio has completed a fair number of tasks and closed a decent percentage of them, but has not made any commits or modified any lines. They could aim to make more frequent contributions through commits and strive to make more significant code changes.\n\nOverall, each team member has room for improvement in their contributions to the project. Some things they can do to improve include setting specific goals, striving for consistency, being proactive in their contributions, and making more significant code changes"
-      );
+      ); */
     } else {
       return res
         .status(404)
@@ -396,28 +415,40 @@ app.get(
   }
 );
 
+/**
+ * Obtiene las categorías de métricas de un proyecto.
+ *
+ * @param {Object} req - El objeto de solicitud HTTP, que debe contener el nombre del proyecto en el parámetro de ruta ":projectName".
+ * @param {Object} res - El objeto de respuesta HTTP.
+ * @returns {void}
+ */
 app.get("/api/projects/:projectName/metricscategories", (req, res) => {
-  console.log("LLAMADA3");
   const { projectName } = req.params;
   const projectMetrics = metricsByProject[projectName];
+  //Si los datos guardados internamente no son nulos
   if (metricsCategories && projectMetrics) {
     var result = {};
     metricsByProject;
-    //console.log(metricsCategories);
+    //Crea un JSON con sólo las métricas importantes del equipo pasado por parámetro
     result = createCustomJSON(
       metricsCategories,
       Object.keys(projectMetrics).length
     );
-    //console.log(result);
     res.json(result);
   } else {
     res.status(404).json({ error: "Categories not found" });
   }
 });
 
+/**
+ * Maneja la solicitud de inicio de sesión de un usuario.
+ *
+ * @param {Object} req - El objeto de solicitud HTTP, que debe contener las credenciales del usuario en el cuerpo de la solicitud.
+ * @param {Object} res - El objeto de respuesta HTTP.
+ * @returns {void}
+ */
 app.post("/api/login", async (req, res) => {
   const { username, password } = req.body;
-  console.log(username);
   try {
     // Retrieve the user's record from the database
     const result = await pool.query(
@@ -443,17 +474,14 @@ app.post("/api/login", async (req, res) => {
     } */
 
     // If the hashes match, the user is authenticated
-    console.log("logged in");
     res.json({ message: "Login successful", ok: true });
   } catch (err) {
-    console.error(err);
     res.status(500).json({ error: "Server error" });
   }
 });
 
-//GET base
-app.get("/", function (req, res) {
-  res.render("index.html");
+app.get("/", (req, res) => {
+  res.json({ ok: "Taiga metrics Back-end is operative" });
 });
 
 const PORT = process.env.PORT || 3000;
