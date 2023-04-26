@@ -15,6 +15,7 @@ function getAlumnosFromMetricsJson(metricsJson) {
     "closedtasks",
     "commits",
     "modifiedlinescontribution",
+    // "dedicationcontribution",
   ];
 
   for (const metric of metricsJson) {
@@ -35,7 +36,12 @@ function getAlumnosFromMetricsJson(metricsJson) {
   alumnos.forEach((id) => {
     resultado[id] = [];
     metricsJson.forEach((dato) => {
-      if (dato.name.includes(id)) {
+      if (
+        dato.name.includes(id) &&
+        dato.qualityFactors.some((factor) =>
+          qualityFactorsOptions.includes(factor)
+        )
+      ) {
         resultado[id].push(dato);
       }
     });
@@ -66,6 +72,7 @@ function getOtherMetricsJson(metricsJson) {
     "unassignedtasks",
     "deviationmetrics",
     "userstoriesdefinitionquality",
+    "activitydistribution",
   ];
 
   for (const metric of metricsJson) {
