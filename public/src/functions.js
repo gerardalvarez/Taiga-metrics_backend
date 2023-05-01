@@ -109,9 +109,51 @@ function getOtherMetricsJson(metricsJson) {
   return objetoOrdenado;
 }
 
+function getStudentsHours(metricsJson) {
+  const alumnos = [];
+  for (const metric of metricsJson) {
+    const { name, qualityFactors } = metric;
+    const username = name.substring(0, name.indexOf(" "));
+
+    if (
+      qualityFactors.includes("hours") &&
+      qualityFactors.includes("dedicationcontribution")
+    ) {
+      if (!alumnos.some((e) => e === username)) {
+        alumnos.push(username);
+      }
+    }
+  }
+
+  const resultado = {};
+
+  alumnos.forEach((id) => {
+    resultado[id] = {};
+    metricsJson.forEach((dato) => {
+      if (
+        dato.name.includes(id) &&
+        dato.qualityFactors.includes("hours") &&
+        dato.qualityFactors.includes("dedicationcontribution")
+      ) {
+        resultado[id] = dato;
+      }
+    });
+  });
+
+  const objetoOrdenado = {};
+  const keys = Object.keys(resultado).sort((keyA, keyB) =>
+    keyA.localeCompare(keyB)
+  );
+  for (const key of keys) {
+    objetoOrdenado[key] = resultado[key];
+  }
+  return objetoOrdenado;
+}
+
 module.exports = {
   funcion1,
   funcion2,
   getAlumnosFromMetricsJson,
   getOtherMetricsJson,
+  getStudentsHours,
 };

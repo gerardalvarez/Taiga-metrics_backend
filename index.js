@@ -11,6 +11,7 @@ const axios = require("axios");
 const {
   getAlumnosFromMetricsJson,
   getOtherMetricsJson,
+  getStudentsHours,
 } = require("./public/src/functions");
 const app = express();
 
@@ -91,6 +92,9 @@ const metricsByProject = {};
 //VARIABLE  GLOBAL DONDE SE ALMACENAN LAS MÉTRICAS GENERALES DEL PROYECTO EN CADA PROYECTO.
 const ProjectmetricsByProject = {};
 
+//VARIABLE GLOBAL DONDE SE ALMACENAN LAS HORAS DE DEDICACIÓN DE LOS ALUMNOS EN CADA PROYECTO. (Va por separado porque provienen de un excel y no se puede mapear con los nombres d4e usuario)
+const StudentHoursByProject = {};
+
 /**
  * Hace una llamada a la api y obtiene Todos los proyectos. Luego para cada proyecto hace una llamada para obtener sus metricas. Si falla lo vuelve a intentar hasta 5 veces.
  * Si falla las 5 veces en vez de sobreescribir la variable global se recupera la anterior version guardada en una variable local auxiliar. Siguiente a eso filtra los jsons obtenidos
@@ -105,6 +109,7 @@ async function fetchProjectMetrics() {
     //Guardar las ultimas métricas por si falla la llamada
     var metricsaux = metricsByProject;
     var projectmetricsaux = ProjectmetricsByProject;
+    var StudentHoursByProjectaux = StudentHoursByProject;
 
     //LLamada para obtener los nombres de los proyectos
     const response = await axios.get(
@@ -150,6 +155,10 @@ async function fetchProjectMetrics() {
         if (projectmetricsaux[projectName]) {
           ProjectmetricsByProject[projectName] = projectmetricsaux[projectName];
         }
+        if (StudentHoursByProjectaux[projectName]) {
+          StudentHoursByProject[projectName] =
+            StudentHoursByProjectaux[projectName];
+        }
       }
     });
 
@@ -163,6 +172,7 @@ async function fetchProjectMetrics() {
       const { projectName, data } = response;
       ProjectmetricsByProject[projectName] = getOtherMetricsJson(data);
       metricsByProject[projectName] = getAlumnosFromMetricsJson(data);
+      StudentHoursByProject[projectName] = getStudentsHours(data);
     });
 
     console.log("Metrics by project: loaded");
@@ -195,10 +205,19 @@ async function fetchProjectMetrics() {
           }
         }
       }
+      //Ordena Alfabeticamente
+      const objetoOrdenado = {};
+      const keys = Object.keys(taigaNames).sort((keyA, keyB) =>
+        keyA.localeCompare(keyB)
+      );
+      for (const key of keys) {
+        objetoOrdenado[key] = taigaNames[key];
+      }
 
       //Sobrescribir el JSON actual con el nuevo JSON
-      metricsByProject[nombreProyecto] = taigaNames;
+      metricsByProject[nombreProyecto] = objetoOrdenado;
     }
+
     console.log("Usernames from github and taiga of the metrics mapped");
   } catch (error) {
     console.error(error);
@@ -361,6 +380,23 @@ app.get("/api/projects/:projectName/usersmetrics", (req, res) => {
 app.get("/api/projects/:projectName/projectmetrics", (req, res) => {
   const { projectName } = req.params;
   const projectMetrics = ProjectmetricsByProject[projectName];
+  if (projectMetrics) {
+    res.json(projectMetrics);
+  } else {
+    res.status(404).json({ error: `Project '${projectName}' not found` });
+  }
+});
+
+/**
+ * Obtiene las horas de los alumnos de un proyecto específico.
+ *
+ * @param {Object} req - El objeto de solicitud HTTP, que debe contener el nombre del proyecto en el parámetro de ruta ":projectName".
+ * @param {Object} res - El objeto de respuesta HTTP.
+ * @returns {void}
+ */
+app.get("/api/projects/:projectName/hours", (req, res) => {
+  const { projectName } = req.params;
+  const projectMetrics = StudentHoursByProject[projectName];
   if (projectMetrics) {
     res.json(projectMetrics);
   } else {
