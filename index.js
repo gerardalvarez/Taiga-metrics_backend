@@ -184,8 +184,6 @@ async function fetchProjectMetrics() {
     //Aqui se obtiene los nombres de usuario y se mapea en uno solo, el de taiga concretamente.
     for (const [nombreProyecto, json] of Object.entries(metricsByProject)) {
       const mapping = await getUsernamesGitTaiga(nombreProyecto);
-      if (nombreProyecto === "pes11a") {
-      }
       const taigaNames = {};
 
       for (const item of mapping) {
@@ -438,7 +436,9 @@ app.get(
           res.json(response.data.choices[0].message.content);
         })
         .catch((error) => {
-          res.json({ error: error.response.data.error });
+          res.json({
+            error: "Erron in evaluation: " + error.response.data.error.message,
+          });
         });
       /*  res.json(
         "Based on these metrics, it seems that ArnauRuesga has not been very active in contributing to the project. He has not completed many tasks or closed many tasks, and has not made any commits or modified any lines. He could improve his performance by setting more specific goals for himself and striving to make regular contributions to the project.\n\nDanieru085 has completed a decent number of tasks and closed a fair amount, but his commit rate and modified lines rate could be improved. He could aim to make more frequent commits and strive to make more significant code changes.\n\nDmolinamesa01 has completed a decent number of tasks and closed a high percentage of them, and has also made many commits and modified a large amount of code. However, he should still strive to maintain consistency in his contributions and not burn out too quickly.\n\nJordicolome789 has completed a fair number of tasks but has not closed any, made any commits or modified any lines. They could improve their performance by setting more specific goals and being more proactive in their contributions.\n\nLluisrubio has completed a fair number of tasks and closed a decent percentage of them, but has not made any commits or modified any lines. They could aim to make more frequent contributions through commits and strive to make more significant code changes.\n\nOverall, each team member has room for improvement in their contributions to the project. Some things they can do to improve include setting specific goals, striving for consistency, being proactive in their contributions, and making more significant code changes"
