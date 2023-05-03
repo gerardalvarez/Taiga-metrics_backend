@@ -20,10 +20,10 @@ const { Pool } = require("pg");
 
 const pool = new Pool({
   user: "postgres",
-  host: "localhost",
+  host: "qrapids_postgres",
   database: "postgres",
   password: "example",
-  port: 5433,
+  port: 5432,
 });
 
 app.use(cookieParser());
