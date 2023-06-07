@@ -16,14 +16,23 @@ const {
 const app = express();
 
 const bcrypt = require("bcrypt");
+const saltRounds = 10; // Número de rondas de hashing para generar la sal
 const { Pool } = require("pg");
 
-const pool = new Pool({
+/* const pool = new Pool({
   user: "postgres",
   host: "qrapids_postgres",
   database: "postgres",
   password: "example",
   port: 5432,
+}); */
+
+const pool = new Pool({
+  user: "postgres",
+  host: "localhost",
+  database: "postgres",
+  password: "example",
+  port: 5433,
 });
 
 app.use(cookieParser());
@@ -95,6 +104,29 @@ const ProjectmetricsByProject = {};
 //VARIABLE GLOBAL DONDE SE ALMACENAN LAS HORAS DE DEDICACIÓN DE LOS ALUMNOS EN CADA PROYECTO. (Va por separado porque provienen de un excel y no se puede mapear con los nombres d4e usuario)
 const StudentHoursByProject = {};
 
+//VARIABLE GLOBAL DONDE SE GUARDAN LAS FECHAS Y LAS EVALUACIONES PARA HACEL EL COOLDOWN Y QUE NO SE PUEDA SPAMMEAR
+const evaluationsByProject = {};
+
+async function initializeProjectsEvaluationRecords() {
+  try {
+    const response = await axios.get(
+      "http://gessi-dashboard.essi.upc.edu:8888/api/projects"
+    );
+    const projectNames = response.data.map((project) => project.name);
+
+    for (const projectName of projectNames) {
+      evaluationsByProject[projectName] = { lastReport: "started", report: "" };
+    }
+  } catch (error) {
+    // Manejar el error de la llamada a la API
+    console.error("Error al obtener los proyectos de la API:", error);
+    // Puedes agregar aquí el código para manejar el error según tus necesidades
+  }
+}
+
+// Uso de la función para inicializar los records de evaluaciones
+initializeProjectsEvaluationRecords();
+
 /**
  * Hace una llamada a la api y obtiene Todos los proyectos. Luego para cada proyecto hace una llamada para obtener sus metricas. Si falla lo vuelve a intentar hasta 5 veces.
  * Si falla las 5 veces en vez de sobreescribir la variable global se recupera la anterior version guardada en una variable local auxiliar. Siguiente a eso filtra los jsons obtenidos
@@ -117,7 +149,14 @@ async function fetchProjectMetrics() {
     );
     const projectNames = response.data.map((project) => project.name);
     console.log("Project names :", projectNames);
-
+    for (const projectName of projectNames) {
+      if (!evaluationsByProject.hasOwnProperty(projectName)) {
+        evaluationsByProject[projectName] = {
+          lastReport: "started",
+          report: "",
+        };
+      }
+    }
     //LLamada para obtener las métricas de cada proyecto
     const metricsPromises = projectNames.map(async (projectName) => {
       const link = `http://gessi-dashboard.essi.upc.edu:8888/api/metrics/current?prj=${projectName}`;
@@ -335,7 +374,7 @@ function createprompt(metrics) {
   var i = 1;
   var studentString = "";
   for (student in metrics) {
-    studentString = `\n${i}. ${student} : hola.`;
+    studentString = `\n${i}. ${student} : `;
     metrics[student].forEach((element) => {
       studentString = studentString + `${element.name} = ${element.value}; `;
     });
@@ -347,8 +386,43 @@ function createprompt(metrics) {
   prompt =
     prompt +
     "\nDo an evaluation and also mention how each member can improve it's performance";
+  //console.log(prompt);
   return prompt;
 }
+
+function checkcooldown(projectName) {
+  if (evaluationsByProject[projectName].lastReport != "started") {
+    const lastEvaluation = new Date(
+      evaluationsByProject[projectName].lastReport
+    );
+    const nextEvaluation = new Date(
+      lastEvaluation.getTime() + 5 * 24 * 60 * 60 * 1000
+    ); // +5 dies
+    const now = new Date();
+    console.log(now);
+    if (now < nextEvaluation) {
+      return false;
+    }
+  }
+  return true;
+}
+
+const verificarContraseña = async (
+  contraseñaIngresada,
+  contraseñaEncriptada
+) => {
+  try {
+    const esCoincidente = await bcrypt.compare(
+      contraseñaIngresada,
+      contraseñaEncriptada
+    );
+    return esCoincidente;
+  } catch (error) {
+    // Manejo de errores
+    console.error("Error al verificar la contraseña:", error);
+    throw error;
+  }
+};
 
 /**
  * Obtiene las métricas de los usuarios de un proyecto específico.
@@ -409,40 +483,75 @@ app.get("/api/projects/:projectName/hours", (req, res) => {
  * @param {Object} res - El objeto de respuesta HTTP.
  * @returns {void}
  */
+app.get("/api/projects/:projectName/lastreport", async (req, res) => {
+  const { projectName } = req.params;
+  const projectMetrics = metricsByProject[projectName];
+  if (projectMetrics && evaluationsByProject[projectName]) {
+    res.json({
+      lastEvaluation: evaluationsByProject[projectName].lastReport,
+      report: evaluationsByProject[projectName].report,
+    });
+  } else {
+    return res
+      .status(404)
+      .json({ error: `Project '${projectName}' not found` });
+  }
+});
+
+/**
+ * Obtiene las métricas de evaluación de un proyecto específico.
+ *
+ * @param {Object} req - El objeto de solicitud HTTP, que debe contener el nombre del proyecto en el parámetro de ruta ":projectName".
+ * @param {Object} res - El objeto de respuesta HTTP.
+ * @returns {void}
+ */
 app.get(
   "/api/projects/:projectName/evaluate/projectmetrics",
   async (req, res) => {
     const { projectName } = req.params;
     const projectMetrics = metricsByProject[projectName];
-    if (projectMetrics) {
-      //Crea el prompt y hace la llamada a la API de OpenAI de ChatGPT
-      const promptproj = createprompt(projectMetrics);
-      axios
-        .post(
-          "https://api.openai.com/v1/chat/completions",
-          {
-            model: "gpt-3.5-turbo",
-            messages: [{ role: "user", content: promptproj }],
-          },
-          {
-            headers: {
-              "Content-Type": "application/json",
-              Authorization:
-                "Bearer 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",
+    if (projectMetrics && evaluationsByProject[projectName]) {
+      if (checkcooldown(projectName)) {
+        //Crea el prompt y hace la llamada a la API de OpenAI de ChatGPT
+        const promptproj = createprompt(projectMetrics);
+        axios
+          .post(
+            "https://api.openai.com/v1/chat/completions",
+            {
+              model: "gpt-3.5-turbo",
+              messages: [{ role: "user", content: promptproj }],
             },
-          }
-        )
-        .then((response) => {
-          res.json(response.data.choices[0].message.content);
-        })
-        .catch((error) => {
-          res.json({
-            error: "Erron in evaluation: " + error.response.data.error.message,
+            {
+              headers: {
+                "Content-Type": "application/json",
+                Authorization:
+                  "Bearer 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",
+              },
+            }
+          )
+          .then((response) => {
+            res.json(response.data.choices[0].message.content);
+            evaluationsByProject[projectName].report =
+              response.data.choices[0].message.content;
+            evaluationsByProject[projectName].lastReport =
+              new Date().toISOString();
+          })
+          .catch((error) => {
+            evaluationsByProject[projectName].report = "aaaaaaaaaaaa";
+            evaluationsByProject[projectName].lastReport =
+              new Date().toISOString();
+            res.json({
+              error:
+                "Erron in evaluation: " + error.response.data.error.message,
+            });
           });
-        });
-      /*  res.json(
+        /*  res.json(
         "Based on these metrics, it seems that ArnauRuesga has not been very active in contributing to the project. He has not completed many tasks or closed many tasks, and has not made any commits or modified any lines. He could improve his performance by setting more specific goals for himself and striving to make regular contributions to the project.\n\nDanieru085 has completed a decent number of tasks and closed a fair amount, but his commit rate and modified lines rate could be improved. He could aim to make more frequent commits and strive to make more significant code changes.\n\nDmolinamesa01 has completed a decent number of tasks and closed a high percentage of them, and has also made many commits and modified a large amount of code. However, he should still strive to maintain consistency in his contributions and not burn out too quickly.\n\nJordicolome789 has completed a fair number of tasks but has not closed any, made any commits or modified any lines. They could improve their performance by setting more specific goals and being more proactive in their contributions.\n\nLluisrubio has completed a fair number of tasks and closed a decent percentage of them, but has not made any commits or modified any lines. They could aim to make more frequent contributions through commits and strive to make more significant code changes.\n\nOverall, each team member has room for improvement in their contributions to the project. Some things they can do to improve include setting specific goals, striving for consistency, being proactive in their contributions, and making more significant code changes"
       ); */
+      } else
+        res.json(
+          "This option is not available until 5 days have passed since the last evaluation"
+        );
     } else {
       return res
         .status(404)
@@ -498,18 +607,13 @@ app.post("/api/login", async (req, res) => {
       return res.status(401).json({ error: "Invalid username or password" });
     }
 
-    /*  // Extract the hashed password from the user's record
-    const hashedPassword = user.password;
-
-    // Hash the password the user provided using the same algorithm and salt value
-    const isMatch = await bcrypt.compare(password, hashedPassword);
-
-    // Compare the resulting hash with the stored hash
-    if (!isMatch) {
+    // Verify the password
+    const esCoincidente = await verificarContraseña(password, user.password);
+    if (!esCoincidente) {
       return res.status(401).json({ error: "Invalid username or password" });
-    } */
+    }
 
-    // If the hashes match, the user is authenticated
+    // Password is correct, login successful
     res.json({ message: "Login successful", ok: true });
   } catch (err) {
     res.status(500).json({ error: "Server error" });
