@@ -117,7 +117,7 @@ async function initializeProjectsEvaluationRecords() {
     for (const projectName of projectNames) {
       evaluationsByProject[projectName] = {
         lastReport: "started",
-        report: "No evaluation yet.",
+        report: "",
       };
     }
   } catch (error) {
@@ -156,7 +156,7 @@ async function fetchProjectMetrics() {
       if (!evaluationsByProject.hasOwnProperty(projectName)) {
         evaluationsByProject[projectName] = {
           lastReport: "started",
-          report: "No evaluation yet.",
+          report: "",
         };
       }
     }
