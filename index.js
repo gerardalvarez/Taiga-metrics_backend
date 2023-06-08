@@ -141,8 +141,9 @@ initializeProjectsEvaluationRecords();
  */
 async function fetchProjectMetrics() {
   try {
+    //chrome.google.com/webstore/devconsole/3e21e760-8c4b-4f3e-b3bd-defbec249f67/settings
     //Guardar las ultimas métricas por si falla la llamada
-    var metricsaux = metricsByProject;
+    https: var metricsaux = metricsByProject;
     var projectmetricsaux = ProjectmetricsByProject;
     var StudentHoursByProjectaux = StudentHoursByProject;
 
@@ -372,7 +373,7 @@ function createCustomJSON(data, attribute) {
  */
 function createprompt(metrics) {
   const num = Object.keys(metrics).length;
-  let prompt = `I have a software project composed by ${num} team members. For managemnt it is used taiga and
+  let prompt = `I have a software project composed by ${num} team members. For management it is used taiga and
   for control version git. I have some metrics of the project for each team member at this moment of the project. `;
   var i = 1;
   var studentString = "";
@@ -528,7 +529,7 @@ app.get(
               headers: {
                 "Content-Type": "application/json",
                 Authorization:
-                  "Bearer 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",
+                  "Bearer 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",
               },
             }
           )
@@ -540,7 +541,6 @@ app.get(
               new Date().toISOString();
           })
           .catch((error) => {
-            evaluationsByProject[projectName].report = "TEXTO IA";
             evaluationsByProject[projectName].lastReport =
               new Date().toISOString();
             res.json({
