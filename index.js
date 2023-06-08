@@ -115,7 +115,10 @@ async function initializeProjectsEvaluationRecords() {
     const projectNames = response.data.map((project) => project.name);
 
     for (const projectName of projectNames) {
-      evaluationsByProject[projectName] = { lastReport: "started", report: "" };
+      evaluationsByProject[projectName] = {
+        lastReport: "started",
+        report: "No evaluation yet.",
+      };
     }
   } catch (error) {
     // Manejar el error de la llamada a la API
@@ -153,7 +156,7 @@ async function fetchProjectMetrics() {
       if (!evaluationsByProject.hasOwnProperty(projectName)) {
         evaluationsByProject[projectName] = {
           lastReport: "started",
-          report: "",
+          report: "No evaluation yet.",
         };
       }
     }
@@ -537,7 +540,7 @@ app.get(
               new Date().toISOString();
           })
           .catch((error) => {
-            evaluationsByProject[projectName].report = "aaaaaaaaaaaa";
+            evaluationsByProject[projectName].report = "TEXTO IA";
             evaluationsByProject[projectName].lastReport =
               new Date().toISOString();
             res.json({
