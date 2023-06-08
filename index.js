@@ -19,21 +19,21 @@ const bcrypt = require("bcrypt");
 const saltRounds = 10; // Número de rondas de hashing para generar la sal
 const { Pool } = require("pg");
 
-/* const pool = new Pool({
+const pool = new Pool({
   user: "postgres",
   host: "qrapids_postgres",
   database: "postgres",
   password: "example",
   port: 5432,
-}); */
+});
 
-const pool = new Pool({
+/* const pool = new Pool({
   user: "postgres",
   host: "localhost",
   database: "postgres",
   password: "example",
   port: 5433,
-});
+}); */
 
 app.use(cookieParser());
 app.use(
