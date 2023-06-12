@@ -529,7 +529,7 @@ app.get(
               headers: {
                 "Content-Type": "application/json",
                 Authorization:
-                  "Bearer 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",
+                  "Bearer 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",
               },
             }
           )
